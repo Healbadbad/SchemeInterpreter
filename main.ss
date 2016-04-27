@@ -70,7 +70,9 @@
     (conditions (list-of expression?))
     (bodies (list-of expression?))
   ]
-
+  [while-exp
+      (condition expression?)
+      (bodies (lambda (x) (andmap expression? x)))]
   )
 	
 	
@@ -207,7 +209,9 @@
        [(eqv? 'case (car datum))
           (case-exp (parse-exp (2nd datum))
                     (map (lambda (x) (lit-exp (car x))) (cddr datum))
-                    (map (lambda (y) (parse-exp (cadr y))) (cddr datum)) )]
+                    (map (lambda (y) (parse-exp (cadr y))) (cddr datum)))]
+       [(eqv? 'while (car datum))
+        (while-exp (parse-exp (2nd datum)) (map parse-exp (cddr datum)))]
        
        [(not (list? datum)) (eopl:error 'parse-exp "is not a proper list: ~s" datum)]
        ;[(> (length datusdwam) 2) (map parse-exp datum)]
@@ -326,6 +330,8 @@
       ;  (one-armed-if-exp (syntax-expand (car conditions)) (syntax-expand (car bodies)))
       ;  (if-exp (syntax-expand (car conditions)) (syntax-expand (car bodies)) (syntax-expand (case-exp (cdr conditions) (cdr bodies))))
     ]
+    [while-exp (condition bodies)
+               (while-exp (syntax-expand condition) (map syntax-expand bodies))]
   )
 )
 
@@ -382,6 +388,13 @@
         (let ([proc-value (eval-exp rator env)]
               [args (eval-rands rands env)])
           (apply-proc proc-value args))]
+       [while-exp (condition bodies)
+; evaluate the bodies and re-evaluate the expression if it is true. Do nothing if false.
+          (if (eval-exp condition env)
+              (begin
+                  (eval-bodies bodies env)
+                  (eval-exp exp env)))]
+
       [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 ; evaluate the list of operands, putting results into a list
@@ -445,7 +458,7 @@
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
 
-(define *prim-proc-names* '(+ - * / add1 sub1 cons equal? eq? eqv? = >= > < quote list list?
+(define *prim-proc-names* '(+ - * / add1 sub1 cons equal? eq? eqv? quotient = >= > < quote list list?
  pair? vector vector? vector-ref not zero? null? car cdr caar cadr cadar length list->vector vector->list
  number? symbol? procedure? set! set-car! set-cdr! vector-set! apply map member))
 
@@ -466,6 +479,7 @@
       [(-)  (apply - args)];(display (list args)) (display "\n\n\n")
       [(*) (apply * args)]
       [(/) (apply / args)]
+      [(quotient) (apply quotient args)]
       [(add1) (+ (1st args) 1)]
       [(sub1) (- (1st args) 1)]
       [(cons) (cons (1st args) (2nd args))]
